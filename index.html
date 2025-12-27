@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虚無的ポイント判定ガチャ</title>
+    <style>
+        /* --- CSS: UI/演出方針に沿ったデザイン --- */
+        :root {
+            --dark-bg: #121212;
+            --primary-color: #00ff99; /* ネオングリーン */
+            --accent-color: #ff00ff; /* ネオンマゼンタ */
+            --button-bg: #222222;
+            --button-hover: #333333;
+            --button-active: #00ff99;
+            --font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--primary-color);
+            font-family: var(--font-family);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            overflow-x: hidden;
+        }
+
+        /* 光るタイトル */
+        h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color);
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+            animation: pulse 2s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.8; }
+            to { opacity: 1; }
+        }
+
+        /* ステータス表示 */
+        .status-container {
+            margin-bottom: 30px;
+            padding: 15px 30px;
+            border: 2px solid var(--accent-color);
+            border-radius: 10px;
+            box-shadow: 0 0 15px var(--accent-color);
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+
+        .status-item {
+            margin: 10px 0;
+            font-size: 1.2em;
+        }
+
+        .status-item strong {
+            color: var(--accent-color);
+            font-size: 1.1em;
+        }
+
+        /* ボタンコンテナ (3ボタン用に調整) */
+        .button-grid {
+            display: flex;
+            gap: 15px;
+            max-width: 600px;
+            width: 100%;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        /* 大きなボタン、押した感のあるUI */
+        .gacha-button {
+            flex: 1; /* 3つのボタンが均等幅になるように */
+            padding: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--primary-color);
+            background-color: var(--button-bg);
+            border: 3px solid var(--primary-color);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            box-shadow: 0 5px 0 var(--primary-color);
+            text-shadow: 0 0 5px var(--primary-color);
+            min-width: 100px; /* 最小幅を設定 */
+        }
+
+        .gacha-button:hover {
+            background-color: var(--button-hover);
+            box-shadow: 0 7px 0 var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .gacha-button:active {
+            background-color: var(--button-active);
+            color: var(--dark-bg);
+            box-shadow: 0 0 0 var(--primary-color);
+            transform: translateY(5px);
+            transition: all 0.05s ease;
+        }
+
+        .gacha-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+            box-shadow: none;
+            transform: none;
+            background-color: var(--button-bg);
+            color: #555;
+            border-color: #555;
+        }
+
+        /* 結果表示 */
+        #result-display {
+            min-height: 100px;
+            font-size: 3em;
+            font-weight: 900;
+            color: var(--accent-color);
+            text-shadow: 0 0 15px var(--accent-color), 0 0 30px var(--accent-color);
+            margin-top: 20px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            letter-spacing: 3px;
+        }
+
+        .result-show {
+            opacity: 1 !important;
+        }
+
+        /* ポイント枯渇時の表示 */
+        #depletion-message {
+            font-size: 1.5em;
+            color: #ff4444;
+            text-shadow: 0 0 10px #ff4444;
+            margin-top: 20px;
+            display: none;
+        }
+
+        #depletion-message.show {
+            display: block;
+        }
+
+        /* アプリの面白さの本質 */
+        .concept {
+            margin-top: 40px;
+            font-size: 0.9em;
+            color: #888;
+            max-width: 600px;
+            border-top: 1px dashed #333;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>虚無的ポイント判定ガチャ</h1>
+
+    <div class="status-container">
+        <div class="status-item">所持ポイント: <strong id="current-points">100</strong></div>
+        <div class="status-item">称号: <strong id="current-title">無名の挑戦者</strong></div>
+        <div class="status-item">運の到達点: <strong id="current-max-level">1</strong> (1/2)</div>
+    </div>
+
+    <div class="button-grid">
+        <!-- ボタンを3つに変更 -->
+        <button class="gacha-button" data-id="1">ボタン1</button>
+        <button class="gacha-button" data-id="2">ボタン2</button>
+        <button class="gacha-button" data-id="3">ボタン3</button>
+    </div>
+
+    <div id="result-display"></div>
+
+    <div id="depletion-message">
+        ポイント枯渇…<span id="revival-timer">5:00</span>後に100ポイント復活
+    </div>
+
+    <div class="concept">
+        <p>勝っても大した意味はない。負け続けても失うのは時間だけ。</p>
+        <p>それでも「次こそは…」と押してしまう、射幸性だけを抽出した虚無的ゲーム。</p>
+    </div>
+
+    <script>
+        // --- JavaScript: ゲームロジック ---
+
+        // ゲーム状態
+        let points = 100;
+        let maxLevelHit = 1; // 称号判定の基準となる、これまでに引いた最高の当たりレベル
+        let isDepleted = false;
+        let revivalTimer = null;
+        const REVIVAL_TIME_MS = 5 * 60 * 1000; // 5分
+
+        // DOM要素
+        const pointsEl = document.getElementById('current-points');
+        const titleEl = document.getElementById('current-title');
+        const maxLevelEl = document.getElementById('current-max-level');
+        const resultDisplayEl = document.getElementById('result-display');
+        const depletionMessageEl = document.getElementById('depletion-message');
+        const revivalTimerEl = document.getElementById('revival-timer');
+        const gachaButtons = document.querySelectorAll('.gacha-button'); // 3つになった
+
+        // ボタン名リスト
+        const BUTTON_NAMES = [
+            "次こそは", "いける！", "虚無へGO", "運命を回せ", "押すなよ？",
+            "ポチッとな", "無意味な一歩", "期待値は裏切る", "神頼み", "夢を追え",
+            "運試し", "虚無の扉", "真実の選択", "押すしかない", "どうせ減る",
+            "ワンチャン", "確率無視", "人生を賭けろ", "無駄遣い", "光を掴め"
+        ];
+
+        // 判定テーブル (Phase 1で設計したもの)
+        // 確率Pは累積確率で計算するため、ここではそのままの確率を使用
+        const GACHA_TABLE = [
+            // { level, probability, reward, name, title, one_in_x }
+            { level: 1, p: 0.500000, r: 0, name: "無", title: "無名の挑戦者", one_in_x: 2 },
+            { level: 2, p: 0.250000, r: 0, name: "虚無", title: "無名の挑戦者", one_in_x: 4 },
+            { level: 3, p: 0.100000, r: 0, name: "無駄", title: "無名の挑戦者", one_in_x: 10 },
+            { level: 4, p: 0.050000, r: 1, name: "現状維持", title: "無名の挑戦者", one_in_x: 20 },
+            { level: 5, p: 0.025000, r: 1, name: "微風", title: "無名の挑戦者", one_in_x: 40 },
+            { level: 6, p: 0.010000, r: 2, name: "微増", title: "無名の挑戦者", one_in_x: 100 },
+            { level: 7, p: 0.005000, r: 3, name: "小波", title: "無名の挑戦者", one_in_x: 200 },
+            { level: 8, p: 0.002500, r: 5, name: "ささやかな希望", title: "無名の挑戦者", one_in_x: 400 },
+            { level: 9, p: 0.001000, r: 10, name: "一筋の光", title: "無名の挑戦者", one_in_x: 1000 },
+            { level: 10, p: 0.000500, r: 20, name: "小確幸", title: "運命の歯車を回した者", one_in_x: 2000 },
+            { level: 11, p: 0.000250, r: 40, name: "錯覚の勝利", title: "運命の歯車を回した者", one_in_x: 4000 },
+            { level: 12, p: 0.000100, r: 100, name: "原点回帰", title: "確率の壁を叩いた者", one_in_x: 10000 },
+            { level: 13, p: 0.000050, r: 200, name: "奇跡の予兆", title: "確率の壁を叩いた者", one_in_x: 20000 },
+            { level: 14, p: 0.000025, r: 400, name: "虚空の輝き", title: "虚無を照らす星", one_in_x: 40000 },
+            { level: 15, p: 0.000010, r: 1000, name: "大いなる無意味", title: "虚無を照らす星", one_in_x: 100000 },
+            { level: 16, p: 0.000005, r: 2000, name: "神の気まぐれ", title: "虚無を照らす星", one_in_x: 200000 },
+            { level: 17, p: 0.000002, r: 5000, name: "宇宙の冗談", title: "虚無を照らす星", one_in_x: 500000 },
+            { level: 18, p: 0.000001, r: 10000, name: "絶対的虚無の超越", title: "超越者", one_in_x: 1000000 },
+            { level: 19, p: 0.0000005, r: 20000, name: "存在しないはずの何か", title: "超越者", one_in_x: 2000000 },
+            { level: 20, p: 0.0000005, r: 40000, name: "全知全能の無価値", title: "神", one_in_x: 2000000 },
+        ];
+
+        // 累積確率の計算
+        const CUMULATIVE_GACHA_TABLE = GACHA_TABLE.reduce((acc, item) => {
+            const last = acc.length > 0 ? acc[acc.length - 1] : null;
+            const cumulativeP = (last ? last.cumulativeP : 0) + item.p;
+            acc.push({ ...item, cumulativeP: cumulativeP });
+            return acc;
+        }, []);
+
+        // UI更新関数
+        function updateUI() {
+            pointsEl.textContent = points;
+            titleEl.textContent = GACHA_TABLE.find(item => item.level === maxLevelHit).title;
+            const maxLevelData = GACHA_TABLE.find(item => item.level === maxLevelHit);
+            maxLevelEl.textContent = `${maxLevelData.level} (1/${maxLevelData.one_in_x.toLocaleString()})`;
+
+            // ボタンの有効/無効切り替え
+            const isDisabled = points <= 0 || isDepleted;
+            gachaButtons.forEach(button => {
+                button.disabled = isDisabled;
+            });
+
+            // 枯渇メッセージの表示/非表示
+            if (points <= 0 && !isDepleted) {
+                startDepletionTimer();
+            } else if (points > 0 && isDepleted) {
+                stopDepletionTimer();
+            }
+        }
+
+        // ボタン名をランダムに更新する関数
+        function updateButtonNames() {
+            // ボタン名リストから重複しないように3つ選ぶ
+            const shuffledNames = BUTTON_NAMES.sort(() => 0.5 - Math.random());
+            const selectedNames = shuffledNames.slice(0, gachaButtons.length);
+
+            gachaButtons.forEach((button, index) => {
+                button.textContent = selectedNames[index];
+            });
+        }
+
+        // 判定ロジック
+        function getGachaResult() {
+            const rand = Math.random();
+            let result = CUMULATIVE_GACHA_TABLE[0]; // デフォルトはレベル1
+
+            for (const item of CUMULATIVE_GACHA_TABLE) {
+                if (rand < item.cumulativeP) {
+                    result = item;
+                    break;
+                }
+            }
+            return result;
+        }
+
+        // 称号更新ロジック
+        function updateTitle(level) {
+            if (level > maxLevelHit) {
+                maxLevelHit = level;
+                const newTitle = GACHA_TABLE.find(item => item.level === maxLevelHit).title;
+                
+                // 称号更新時の派手な演出
+                resultDisplayEl.innerHTML = `
+                    <span style="color: var(--accent-color); animation: title-flash 0.5s 3 alternate;">
+                        称号更新！
+                    </span>
+                    <br>
+                    ${newTitle}
+                `;
+                resultDisplayEl.classList.add('result-show');
+                setTimeout(() => {
+                    resultDisplayEl.classList.remove('result-show');
+                    updateUI(); // 称号をUIに反映
+                }, 2000);
+            }
+        }
+
+        // 結果表示演出
+        function showResult(result) {
+            const resultText = result.name.toUpperCase();
+            const pointChange = result.r - 1;
+            const pointText = pointChange >= 0 ? `+${pointChange}` : `${pointChange}`;
+            
+            // 価値のない結果ほど演出はちゃんとしている (レベル1-3は特に派手に)
+            let color = 'var(--accent-color)';
+            let animation = 'result-flash 0.1s 5 alternate';
+            
+            if (result.level <= 3) {
+                // 無、虚無、無駄
+                color = '#ff4444'; // 赤
+                animation = 'shake 0.1s 10 alternate';
+            } else if (result.level >= 18) {
+                // 超越、神レベル
+                color = '#ffff00'; // 金
+                animation = 'super-flash 0.05s 20 alternate';
+            }
+
+            resultDisplayEl.innerHTML = `
+                <span style="color: ${color}; animation: ${animation};">
+                    ${resultText}
+                </span>
+                <div style="font-size: 0.5em; margin-top: 10px; color: var(--primary-color);">
+                    ${pointText} ポイント
+                </div>
+            `;
+            resultDisplayEl.classList.add('result-show');
+            
+            setTimeout(() => {
+                resultDisplayEl.classList.remove('result-show');
+            }, 1500);
+        }
+
+        // CSS for result animations (再定義)
+        const styleSheet = document.styleSheets[0];
+        // 既存のルールを削除する代わりに、存在しないことを前提に挿入
+        // 実際にはブラウザ環境で実行されるため、ここでは安全に挿入のみを行う
+        styleSheet.insertRule(`
+            @keyframes result-flash {
+                from { opacity: 1; }
+                to { opacity: 0.5; }
+            }
+        `, styleSheet.cssRules.length);
+        styleSheet.insertRule(`
+            @keyframes title-flash {
+                from { text-shadow: 0 0 5px var(--accent-color); }
+                to { text-shadow: 0 0 20px var(--accent-color); }
+            }
+        `, styleSheet.cssRules.length);
+        styleSheet.insertRule(`
+            @keyframes shake {
+                0% { transform: translateX(0); }
+                25% { transform: translateX(-5px); }
+                50% { transform: translateX(5px); }
+                75% { transform: translateX(-5px); }
+                100% { transform: translateX(0); }
+            }
+        `, styleSheet.cssRules.length);
+        styleSheet.insertRule(`
+            @keyframes super-flash {
+                from { opacity: 1; text-shadow: 0 0 20px #ffff00; }
+                to { opacity: 0.8; text-shadow: 0 0 5px #ffff00; }
+            }
+        `, styleSheet.cssRules.length);
+
+
+        // ポイント枯渇タイマー
+        function startDepletionTimer() {
+            if (isDepleted) return;
+            isDepleted = true;
+            depletionMessageEl.classList.add('show');
+            updateUI(); // ボタンを無効化
+
+            const startTime = Date.now();
+            const endTime = startTime + REVIVAL_TIME_MS;
+
+            function updateTimer() {
+                const remaining = endTime - Date.now();
+                if (remaining <= 0) {
+                    points += 100;
+                    isDepleted = false;
+                    depletionMessageEl.classList.remove('show');
+                    clearInterval(revivalTimer);
+                    revivalTimer = null;
+                    updateUI();
+                    updateButtonNames(); // 復活時にボタン名も更新
+                    resultDisplayEl.textContent = "ポイント復活！+100P";
+                    resultDisplayEl.classList.add('result-show');
+                    setTimeout(() => resultDisplayEl.classList.remove('result-show'), 1500);
+                    return;
+                }
+
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                revivalTimerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            updateTimer();
+            revivalTimer = setInterval(updateTimer, 1000);
+        }
+
+        function stopDepletionTimer() {
+            if (revivalTimer) {
+                clearInterval(revivalTimer);
+                revivalTimer = null;
+            }
+            isDepleted = false;
+            depletionMessageEl.classList.remove('show');
+        }
+
+        // ボタンクリックハンドラ
+        function handleGachaClick() {
+            if (points <= 0 || isDepleted) {
+                return;
+            }
+
+            // 1. 1ポイント消費
+            points -= 1;
+
+            // 2. 判定
+            const result = getGachaResult();
+
+            // 3. ポイント還元
+            points += result.r;
+
+            // 4. 称号更新チェック
+            updateTitle(result.level);
+
+            // 5. 結果表示
+            showResult(result);
+
+            // 6. UI更新
+            updateUI();
+            
+            // 7. ボタン名を更新
+            updateButtonNames();
+        }
+
+        // イベントリスナーの登録
+        gachaButtons.forEach(button => {
+            button.addEventListener('click', handleGachaClick);
+        });
+
+        // 初期UIの描画とボタン名の設定
+        updateUI();
+        updateButtonNames();
+
+    </script>
+</body>
+</html>
